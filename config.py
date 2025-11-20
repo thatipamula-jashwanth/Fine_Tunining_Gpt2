@@ -1,8 +1,8 @@
 CONFIG = {
-    "model_name": "gpt2",
-    "dataset_name": "roneneldan/TinyStories",
-    "train_file": None,
-    "valid_file": None,
+    "model_name": "gpt2-large",
+    "dataset_name": None,
+    "train_file": "data/train.txt",
+    "valid_file": "data/valid.txt",
 
     "output_dir": "outputs",
     "logging_dir": "outputs/logs",
@@ -10,9 +10,9 @@ CONFIG = {
     "max_seq_length": 128,
     "train_on_inputs": True,
 
-    "per_device_train_batch_size": 4,
-    "per_device_eval_batch_size": 4,
-    "gradient_accumulation_steps": 4,
+    "per_device_train_batch_size": 2,
+    "per_device_eval_batch_size": 2,
+    "gradient_accumulation_steps": 8,
 
     "num_train_epochs": 3,
     "learning_rate": 0.0002,
@@ -24,7 +24,6 @@ CONFIG = {
     "save_total_limit": 3,
 
     "seed": 42,
-
     "fp16": True,
 
     "use_lora": True,
@@ -34,8 +33,10 @@ CONFIG = {
     "lora_alpha": 16,
     "lora_dropout": 0.1,
 
-    "target_modules": ["c_attn"],
+    "target_modules": ["q_proj", "v_proj"],
 
     "use_4bit_quantization": False,
-    "bnb_compute_dtype": "float16"
+    "bnb_compute_dtype": "float16",
+
+    "device_map": "auto"
 }
