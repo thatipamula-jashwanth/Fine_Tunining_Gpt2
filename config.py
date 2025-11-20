@@ -11,14 +11,14 @@ CONFIG = {
     "train_on_inputs": True,
 
 
-    "per_device_train_batch_size": 1,
-    "per_device_eval_batch_size": 1,
-    "gradient_accumulation_steps": 16,
+    "per_device_train_batch_size": 4,
+    "per_device_eval_batch_size": 4,
+    "gradient_accumulation_steps": 4,  
 
-    "num_train_epochs": 1,
+    "num_train_epochs": 3,            
     "learning_rate": 0.0002,
     "weight_decay": 0.0,
-    "warmup_steps": 50,
+    "warmup_steps": 100,
 
     "save_steps": 500,
     "logging_steps": 50,
@@ -27,7 +27,7 @@ CONFIG = {
     "seed": 42,
 
 
-    "fp16": False,
+    "fp16": True,
 
     "use_lora": True,
     "use_qlora": False,
@@ -38,9 +38,10 @@ CONFIG = {
 
     "target_modules": ["c_attn"],
 
+
     "use_4bit_quantization": False,
-    "bnb_compute_dtype": "float32",
+    "bnb_compute_dtype": "float16",
 
 
-    "device_map": "cpu"
+    "device_map": "auto"
 }
