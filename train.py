@@ -1,34 +1,24 @@
 import os
-import json
 import torch
 import random
 import logging
-
-from transformers import (
-    TrainingArguments,
-    Trainer,
-    default_data_collator
-)
+from transformers import TrainingArguments, Trainer, default_data_collator
 
 from data_utils import load_text_dataset, get_tokenizer, tokenize_and_group
-from model_utils import (
-    load_base_model,
-    apply_lora_adapters,
-    print_trainable_parameters,
-    save_peft_adapter,
-    move_model_to_gpu
-)
+from model_utils import load_base_model, apply_lora_adapters, print_trainable_parameters, save_peft_adapter
+from config import CONFIG
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+device = torch.device("cuda")
+if not torch.cuda.is_available():
+    raise RuntimeError("GPU not found! GPU-only training.")
 
 def set_seed(seed: int):
     random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
+    torch.cuda.manual_seed_all(seed)
 
 def prepare_dataset(ds, tokenizer, max_length):
     tokenized = {}
@@ -40,31 +30,22 @@ def prepare_dataset(ds, tokenizer, max_length):
         )
     return tokenized
 
-
-def main(config_path: str):
-    # Load config
-    with open(config_path) as f:
-        cfg = json.load(f)
-
+def main():
+    cfg = CONFIG
     set_seed(cfg.get("seed", 42))
 
-    # Load dataset
     ds = load_text_dataset(
         train_file=cfg.get("train_file"),
         valid_file=cfg.get("valid_file"),
         dataset_name=cfg.get("dataset_name"),
     )
 
-    # Load model + tokenizer (NO device_map here)
-    use_4bit = cfg.get("use_4bit_quantization", False)
     model, tokenizer = load_base_model(
         cfg["model_name"],
-        use_4bit=use_4bit,
-        bnb_config=None,
-        torch_dtype=torch.float16 if cfg.get("fp16", True) else None,
+        use_4bit=cfg.get("use_4bit_quantization", False),
+        torch_dtype=torch.float16 if cfg.get("fp16", True) else torch.float32
     )
 
-    # Apply LoRA
     if cfg.get("use_lora", True):
         model = apply_lora_adapters(
             model,
@@ -75,24 +56,15 @@ def main(config_path: str):
         )
         print_trainable_parameters(model)
 
-
-    model = move_model_to_gpu(model)
-    print("Model device →", next(model.parameters()).device)
-
-    # Tokenize dataset
     tokenized = prepare_dataset(
         ds,
         tokenizer,
         max_length=cfg.get("max_seq_length", 128)
     )
 
-    # Trainer setup
-    output_dir = cfg.get("output_dir", "outputs")
-    logging_dir = cfg.get("logging_dir", "outputs/logs")
-
     training_args = TrainingArguments(
-        output_dir=output_dir,
-        logging_dir=logging_dir,
+        output_dir=cfg.get("output_dir", "outputs"),
+        logging_dir=cfg.get("logging_dir", "outputs/logs"),
         per_device_train_batch_size=cfg.get("per_device_train_batch_size", 2),
         per_device_eval_batch_size=cfg.get("per_device_eval_batch_size", 2),
         gradient_accumulation_steps=cfg.get("gradient_accumulation_steps", 8),
@@ -107,7 +79,8 @@ def main(config_path: str):
         evaluation_strategy="steps" if "validation" in tokenized else "no",
         eval_steps=cfg.get("save_steps", 500),
         report_to="tensorboard",
-        optim="paged_adamw_32bit" if use_4bit else "adamw_torch",
+        optim="paged_adamw_32bit" if cfg.get("use_4bit_quantization", False) else "adamw_torch",
+        device=device
     )
 
     trainer = Trainer(
@@ -116,20 +89,12 @@ def main(config_path: str):
         train_dataset=tokenized["train"],
         eval_dataset=tokenized.get("validation", None),
         data_collator=default_data_collator,
+        tokenizer=tokenizer,
     )
 
-    # Train
     trainer.train()
-
-    # Save adapters
-    save_peft_adapter(model, tokenizer, output_dir)
-
-    log.info("Training complete.")
-
+    save_peft_adapter(model, tokenizer, cfg.get("output_dir", "outputs"))
+    log.info("GPU training complete.")
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="config.json")
-    args = parser.parse_args()
-    main(args.config)
+    main()
