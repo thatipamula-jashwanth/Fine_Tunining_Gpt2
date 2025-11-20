@@ -10,12 +10,11 @@ CONFIG = {
     "max_seq_length": 128,
     "train_on_inputs": True,
 
-
     "per_device_train_batch_size": 4,
     "per_device_eval_batch_size": 4,
-    "gradient_accumulation_steps": 4,  
+    "gradient_accumulation_steps": 4,
 
-    "num_train_epochs": 3,            
+    "num_train_epochs": 3,
     "learning_rate": 0.0002,
     "weight_decay": 0.0,
     "warmup_steps": 100,
@@ -25,7 +24,6 @@ CONFIG = {
     "save_total_limit": 3,
 
     "seed": 42,
-
 
     "fp16": True,
 
@@ -38,10 +36,6 @@ CONFIG = {
 
     "target_modules": ["c_attn"],
 
-
     "use_4bit_quantization": False,
-    "bnb_compute_dtype": "float16",
-
-
-    "device_map": "auto"
+    "bnb_compute_dtype": "float16"
 }
