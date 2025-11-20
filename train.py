@@ -1,7 +1,9 @@
 import os
+import json
 import torch
 import random
 import logging
+
 from transformers import (
     TrainingArguments,
     Trainer,
@@ -13,9 +15,9 @@ from model_utils import (
     load_base_model,
     apply_lora_adapters,
     print_trainable_parameters,
-    save_peft_adapter
+    save_peft_adapter,
+    move_model_to_gpu
 )
-from config import CONFIG  
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -39,8 +41,11 @@ def prepare_dataset(ds, tokenizer, max_length):
     return tokenized
 
 
-def main():
-    cfg = CONFIG  # use Python config directly
+def main(config_path: str):
+    # Load config
+    with open(config_path) as f:
+        cfg = json.load(f)
+
     set_seed(cfg.get("seed", 42))
 
     # Load dataset
@@ -50,26 +55,29 @@ def main():
         dataset_name=cfg.get("dataset_name"),
     )
 
-    # Load model + tokenizer
+    # Load model + tokenizer (NO device_map here)
     use_4bit = cfg.get("use_4bit_quantization", False)
     model, tokenizer = load_base_model(
         cfg["model_name"],
         use_4bit=use_4bit,
         bnb_config=None,
-        device_map=cfg.get("device_map", "auto"),
         torch_dtype=torch.float16 if cfg.get("fp16", True) else None,
     )
 
-    # Apply LoRA if needed
+    # Apply LoRA
     if cfg.get("use_lora", True):
         model = apply_lora_adapters(
             model,
             r=cfg.get("lora_rank", 8),
             alpha=cfg.get("lora_alpha", 16),
             dropout=cfg.get("lora_dropout", 0.1),
-            target_modules=cfg.get("target_modules"),
+            target_modules=cfg.get("target_modules")
         )
         print_trainable_parameters(model)
+
+
+    model = move_model_to_gpu(model)
+    print("Model device →", next(model.parameters()).device)
 
     # Tokenize dataset
     tokenized = prepare_dataset(
@@ -78,10 +86,13 @@ def main():
         max_length=cfg.get("max_seq_length", 128)
     )
 
-    # Training arguments
+    # Trainer setup
+    output_dir = cfg.get("output_dir", "outputs")
+    logging_dir = cfg.get("logging_dir", "outputs/logs")
+
     training_args = TrainingArguments(
-        output_dir=cfg.get("output_dir", "outputs"),
-        logging_dir=cfg.get("logging_dir", "outputs/logs"),
+        output_dir=output_dir,
+        logging_dir=logging_dir,
         per_device_train_batch_size=cfg.get("per_device_train_batch_size", 2),
         per_device_eval_batch_size=cfg.get("per_device_eval_batch_size", 2),
         gradient_accumulation_steps=cfg.get("gradient_accumulation_steps", 8),
@@ -99,7 +110,6 @@ def main():
         optim="paged_adamw_32bit" if use_4bit else "adamw_torch",
     )
 
-    # Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -111,10 +121,15 @@ def main():
     # Train
     trainer.train()
 
-    # Save LoRA adapter + tokenizer
-    save_peft_adapter(model, tokenizer, cfg.get("output_dir", "outputs"))
+    # Save adapters
+    save_peft_adapter(model, tokenizer, output_dir)
+
     log.info("Training complete.")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.json")
+    args = parser.parse_args()
+    main(args.config)
