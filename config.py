@@ -1,8 +1,8 @@
 CONFIG = {
     "model_name": "gpt2-large",
-    "dataset_name": None,
-    "train_file": "data/train.txt",
-    "valid_file": "data/valid.txt",
+    "dataset_name": "roneneldan/TinyStories",  
+    "train_file": None,                       
+    "valid_file": None,                        
 
     "output_dir": "outputs",
     "logging_dir": "outputs/logs",
@@ -24,7 +24,7 @@ CONFIG = {
     "save_total_limit": 3,
 
     "seed": 42,
-    "fp16": True,
+    "fp16": True,                
 
     "use_lora": True,
     "use_qlora": False,
@@ -33,10 +33,10 @@ CONFIG = {
     "lora_alpha": 16,
     "lora_dropout": 0.1,
 
-    "target_modules": ["q_proj", "v_proj"],
+    "target_modules": ["attn.c_attn"], 
 
     "use_4bit_quantization": False,
     "bnb_compute_dtype": "float16",
 
-    "device_map": "auto"
+    "device_map": "auto"         
 }
